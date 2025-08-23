@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/CMakeFiles/bootloader
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/CMakeFiles/bootloader.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/CMakeFiles/bootloader-complete.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+D:/PROGRAMMING/mini_project1/espnow_central_node/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule

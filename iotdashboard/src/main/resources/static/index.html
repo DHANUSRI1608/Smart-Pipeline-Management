@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ESP32 Embedded Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/js/all.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { primary:"#3b82f6", secondary:"#1e40af", accent:"#10b981", danger:"#ef4444", warning:"#f59e0b" }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// API endpoints
+const API = {
+  stats: "/api/stats",
+  nodes: "/api/nodes",
+  node: id => `/api/nodes/${id}`,
+  current: id => `/api/nodes/${id}/current`,
+  readings: (id,limit=30) => `/api/nodes/${id}/readings?limit=${limit}`,
+};
+
+// Generic fetch hook
+function useApi(url, fallback, deps = [], interval = 5000) {
+  const [data,setData] = useState(fallback);
+  useEffect(() => {
+    let live = true;
+    const fetchData = () => {
+      fetch(url)
+        .then(r=>r.ok? r.json() : Promise.reject(r.status))
+        .then(j=>{ if(live) setData(j); })
+        .catch(()=>{ if(live) setData(fallback); });
+    };
+    fetchData();
+    const id = interval>0 ? setInterval(fetchData, interval) : null;
+    return ()=>{ live=false; if(id) clearInterval(id); };
+  }, deps);
+  return { data };
+}
+
+// Frequent updates hook
+function useCurrentNodeData(nodeId, fallback={}) {
+  const [currentData, setCurrentData] = useState(fallback);
+  useEffect(() => {
+    if(!nodeId) return;
+    let live=true;
+    const fetchData = () => {
+      fetch(API.current(nodeId))
+        .then(r=>r.ok?r.json():Promise.reject(r.status))
+        .then(j=>{ if(live) setCurrentData(j); })
+        .catch(()=>{ if(live) setCurrentData(fallback); });
+    };
+    fetchData();
+    const id = setInterval(fetchData, 2000);
+    return ()=>{ live=false; clearInterval(id); };
+  }, [nodeId]);
+  return { data: currentData };
+}
+
+// Helpers
+const fmt = v => (v===null||v===undefined)?"-":(typeof v==="number"?v.toFixed(1):v);
+
+// Components
+function Header(){
+  const [status,setStatus]=useState("connecting");
+  useEffect(()=>{
+    const ping = () => fetch("/api/nodes")
+      .then(r=>setStatus(r.ok?"connected":"error"))
+      .catch(()=>setStatus("error"));
+    ping();
+    const id = setInterval(ping, 8000);
+    return ()=>clearInterval(id);
+  }, []);
+  return (
+    <header className="bg-white shadow">
+      <div className="max-w-7xl mx-auto py-6 px-4 flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-gray-900">
+          <i className="fas fa-microchip mr-2 text-primary"></i>ESP32 Embedded Dashboard
+        </h1>
+        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${status==="connected"?"bg-green-100 text-green-800":status==="error"?"bg-red-100 text-red-800":"bg-yellow-100 text-yellow-800"}`}>
+          <span className={`h-2 w-2 rounded-full mr-2 ${status==="connected"?"bg-green-500":status==="error"?"bg-red-500":"bg-yellow-500"}`}></span>
+          {status==="connected"?"Connected":status==="error"?"Connection Error":"Connecting..."}
+        </span>
+      </div>
+    </header>
+  );
+}
+
+function StatCard({icon,label,value,color}){
+  return (
+    <div className="bg-white p-6 rounded-lg shadow flex items-center">
+      <div className={`p-3 rounded-full ${color}`}><i className={`fas fa-${icon} text-xl`}></i></div>
+      <div className="ml-4">
+        <h3 className="text-sm font-medium text-gray-500">{label}</h3>
+        <p className="text-2xl font-semibold text-gray-900">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function SummaryBar({stats}){
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <StatCard icon="network-wired" label="Total Nodes" value={stats.total} color="bg-blue-100 text-blue-800"/>
+      <StatCard icon="wifi" label="Online" value={stats.online} color="bg-green-100 text-green-800"/>
+      <StatCard icon="plug" label="Offline" value={stats.offline} color="bg-red-100 text-red-800"/>
+    </div>
+  );
+}
+
+function Badge({label,value}){
+  return (
+    <div className="bg-gray-100 rounded-md px-3 py-2">
+      <p className="text-gray-500 text-xs">{label}</p>
+      <p className="text-gray-900 font-medium">{value}</p>
+    </div>
+  );
+}
+
+function NodeCard({node,onOpen}){
+  const {data:currentData} = useCurrentNodeData(node.id, node);
+  return (
+    <button onClick={()=>onOpen(node.id)} className="bg-white p-5 rounded-lg shadow text-left hover:ring-2 hover:ring-primary focus:outline-none">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <span className={`p-3 rounded-full ${currentData.status==="ONLINE"?"bg-green-100 text-green-800":currentData.status==="OFFLINE"?"bg-red-100 text-red-800":"bg-yellow-100 text-yellow-800"}`}>
+            <i className="fas fa-microchip"></i>
+          </span>
+          <div className="ml-4">
+            <h3 className="text-lg font-semibold text-gray-900">{currentData.name}</h3>
+            <p className="text-sm text-gray-500">{currentData.ipAddress} • {currentData.macAddress || "-"}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-gray-500">Temp</p>
+          <p className="text-lg font-semibold">{fmt(currentData.temperature)} °C</p>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+        <Badge label="Humidity" value={`${fmt(currentData.humidity)} %`}/>
+        <Badge label="Pressure" value={`${fmt(currentData.pressure)} hPa`}/>
+        <Badge label="Light" value={`${fmt(currentData.light)} %`}/>
+      </div>
+    </button>
+  );
+}
+
+function NodeGrid({nodes,onOpen}){
+  if(!nodes || nodes.length===0) return <p className="text-gray-500">No nodes yet.</p>;
+  return <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{nodes.map(n=><NodeCard key={n.id} node={n} onOpen={onOpen}/>)}</div>;
+}
+
+// Fixed LineChart
+function LineChart({title,labels,data,unit}){
+  const ref = useRef(null);
+  const chartRef = useRef(null);
+
+  useEffect(()=>{
+    if(!ref.current || !labels || labels.length===0) return;
+    const ctx = ref.current.getContext("2d");
+    chartRef.current = new Chart(ctx,{
+      type:"line",
+      data:{
+        labels,
+        datasets:[{
+          label:`${title} (${unit})`,
+          data:data.map(v=>typeof v==="number"?v:0),
+          borderColor:"rgba(59,130,246,0.8)",
+          backgroundColor:"rgba(59,130,246,0.2)",
+          tension:0.3,
+          fill:true,
+          borderWidth:2
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{y:{beginAtZero:false}}
+      }
+    });
+    return ()=>chartRef.current && chartRef.current.destroy();
+  },[labels.length]);
+
+  useEffect(()=>{
+    if(!chartRef.current) return;
+    chartRef.current.data.labels = labels;
+    chartRef.current.data.datasets[0].data = data.map(v=>typeof v==="number"?v:0);
+    chartRef.current.update();
+  },[labels,data]);
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow h-64">
+      <h3 className="text-lg font-medium text-gray-900 mb-3">{title}</h3>
+      <canvas ref={ref} style={{height:"100%", width:"100%"}}></canvas>
+    </div>
+  );
+}
+
+function InfoTile({icon,label,value}){
+  return (
+    <div className="border border-gray-200 rounded-lg p-4">
+      <h4 className="text-sm text-gray-500 mb-1"><i className={`fas fa-${icon} mr-2`}></i>{label}</h4>
+      <p className="text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function NodeModal({nodeId,onClose}){
+  const {data:node} = useApi(API.node(nodeId),{},[nodeId],5000);
+  const {data:readings} = useApi(API.readings(nodeId,30),[],[nodeId],30000);
+  const {data:currentData} = useCurrentNodeData(nodeId,node);
+
+  const sortedReadings = readings && readings.length>0 ? readings.slice().reverse() : [];
+  const labels = sortedReadings.map(r => new Date(r.timestamp).toLocaleTimeString());
+  const temps = sortedReadings.map(r => r.temperature);
+  const hums = sortedReadings.map(r => r.humidity);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full p-6 relative">
+        <button className="absolute right-3 top-3 text-gray-500 hover:text-gray-700" onClick={onClose}><i className="fas fa-times"></i></button>
+        <div className="flex items-center mb-4">
+          <span className={`p-2 rounded-full ${currentData.status==="ONLINE"?"bg-green-100 text-green-800":currentData.status==="OFFLINE"?"bg-red-100 text-red-800":"bg-yellow-100 text-yellow-800"}`}>
+            <i className="fas fa-microchip"></i>
+          </span>
+          <div className="ml-3">
+            <h3 className="text-xl font-semibold">{currentData.name||"Node"}</h3>
+            <p className="text-sm text-gray-500">{currentData.ipAddress} • {currentData.macAddress || "-"} • {currentData.location||"-"}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <InfoTile icon="temperature-high" label="Temperature" value={`${fmt(currentData.temperature)} °C`}/>
+          <InfoTile icon="tint" label="Humidity" value={`${fmt(currentData.humidity)} %`}/>
+          <InfoTile icon="tachometer-alt" label="Pressure" value={`${fmt(currentData.pressure)} hPa`}/>
+          <InfoTile icon="lightbulb" label="Light" value={`${fmt(currentData.light)} %`}/>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <LineChart title="Temperature History" labels={labels} data={temps} unit="°C"/>
+          <LineChart title="Humidity History" labels={labels} data={hums} unit="%"/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Footer(){
+  return (
+    <footer className="bg-white border-t border-gray-200">
+      <div className="max-w-7xl mx-auto py-6 px-4 text-center text-gray-500 text-sm">&copy; {new Date().getFullYear()} ESP32 Embedded Dashboard</div>
+    </footer>
+  );
+}
+
+// Main App
+function App(){
+  const [selected,setSelected]=useState(null);
+  const {data:stats} = useApi(API.stats,{total:0,online:0,offline:0},[],10000);
+  const {data:nodes} = useApi(API.nodes,[],[],10000);
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <Header/>
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <SummaryBar stats={stats}/>
+        <section className="mt-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">Connected Nodes</h2>
+          <NodeGrid nodes={nodes} onOpen={setSelected}/>
+        </section>
+        {selected && <NodeModal nodeId={selected} onClose={()=>setSelected(null)}/>}
+      </main>
+      <Footer/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
