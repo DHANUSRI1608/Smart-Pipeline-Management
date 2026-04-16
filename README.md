@@ -1,13 +1,9 @@
-## System Architecture
+## System Architecture 🎯
 
-Pressure Sensor ─┐
-                 ├──> ESP32 ───> ESP32NOW ───> Cloud Dashboard
-Flow Sensor ─────┘                    │
-                                     │
-                                Alert System
-                             (Notification)
 
-## Working Principle
+<img width="540" height="151" alt="image" src="https://github.com/user-attachments/assets/c92b4bca-a09d-4f06-9378-b04cb4c36274" />
+
+## Working Principle ⚙️
 1. Sensors collect pipeline data  
 2. ESP32 reads sensor values  
 3. Data is processed inside ESP32  
