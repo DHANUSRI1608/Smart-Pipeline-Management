@@ -1,4 +1,4 @@
-## Smart Pipelline Management System using WSN
+## Smart Pipeline Management System using WSN
 ## System Architecture 🎯
 
 
